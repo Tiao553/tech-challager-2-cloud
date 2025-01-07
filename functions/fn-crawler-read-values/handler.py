@@ -1,6 +1,15 @@
+import base64
+import datetime
+import json
+import logging
+import os
 import subprocess
 import sys
-import os
+import time
+
+import boto3
+import pandas as pd
+import requests
 
 # Diretório de instalação (alterar conforme necessário)
 install_dir = "/tmp/python"
@@ -38,15 +47,6 @@ except subprocess.CalledProcessError as e:
     print(f"Erro ao instalar os pacotes: {e}")
     raise
 
-
-import json
-import base64
-import boto3
-import requests
-import logging
-import pandas as pd
-import datetime
-import time
 
 # Configura o logger para o Lambda e CloudWatch
 logger = logging.getLogger()
@@ -97,7 +97,8 @@ def lambda_handler(event, context):
             response = requests.get(url, headers=headers)
 
             if response.status_code != 200:
-                logger.error(f"Erro ao buscar dados iniciais: {response.status_code}")
+                logger.error(
+                    f"Erro ao buscar dados iniciais: {response.status_code}")
                 return None
 
             json_response = response.json()
@@ -110,7 +111,8 @@ def lambda_handler(event, context):
             logger.info(f"Total de páginas: {total_pages}")
 
             for page_number in range(1, total_pages + 1):
-                logger.info(f"Buscando a página {page_number} de {total_pages}...")
+                logger.info(
+                    f"Buscando a página {page_number} de {total_pages}...")
                 encoded_param = generate_encoded_param(page_number)
                 url = f"https://sistemaswebb3-listados.b3.com.br/indexProxy/indexCall/GetPortfolioDay/{encoded_param}"
 
@@ -131,7 +133,8 @@ def lambda_handler(event, context):
                             f"Falha ao buscar a página {page_number}: {response.status_code}"
                         )
                 except Exception as e:
-                    logger.error(f"Erro ao buscar dados da página {page_number}: {e}")
+                    logger.error(
+                        f"Erro ao buscar dados da página {page_number}: {e}")
 
                 time.sleep(1)  # Evitar sobrecarregar a API
 
@@ -153,7 +156,7 @@ def lambda_handler(event, context):
             local_path = f"{bucket_name}/{s3_path}{file_name}"
 
             df.to_parquet(f"{local_path}", index=False)
-            #s3.upload_file(f"{local_path}", bucket_name, f"{s3_path}{file_name}")
+            # s3.upload_file(f"{local_path}", bucket_name, f"{s3_path}{file_name}")
             logger.info(f"Dados salvos no S3: {file_name}")
         except Exception as e:
             logger.error(f"Erro ao salvar os dados no S3: {e}")

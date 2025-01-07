@@ -14,8 +14,8 @@ resource "aws_lambda_function" "crawler_lambda" {
 
 # Agendamento no CloudWatch (EventBridge)
 resource "aws_cloudwatch_event_rule" "daily_trigger" {
-  name        = "${local.prefix}_DailyTrigger"
-  description = "Dispara a função Lambda diariamente às 20h"
+  name                = "${local.prefix}_DailyTrigger"
+  description         = "Dispara a função Lambda diariamente às 20h"
   schedule_expression = "cron(0 20 * * ? *)" #alteração pra teste
 }
 

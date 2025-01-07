@@ -2,7 +2,7 @@
 resource "aws_s3_bucket" "buckets" {
   count  = length(var.bucket_names)
   bucket = "${local.prefix}-${var.bucket_names[count.index]}-${var.account}"
-  tags = local.common_tags
+  tags   = local.common_tags
   acl    = "private"
 }
 
@@ -26,13 +26,13 @@ resource "aws_s3_bucket_policy" "buckets_policy" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid       = "AllowAccountAccess",
-        Effect    = "Allow",
+        Sid    = "AllowAccountAccess",
+        Effect = "Allow",
         Principal = {
           AWS = "arn:aws:iam::593793061865:user/master-tiao" # Permite acesso apenas à conta AWS
         },
-        Action    = ["s3:*"], # Ou restrinja para ações específicas como "s3:GetObject"
-        Resource  = [
+        Action = ["s3:*"], # Ou restrinja para ações específicas como "s3:GetObject"
+        Resource = [
           "${aws_s3_bucket.buckets[count.index].arn}",
           "${aws_s3_bucket.buckets[count.index].arn}/*"
         ]
@@ -48,7 +48,7 @@ resource "aws_s3_bucket_policy" "buckets_policy" {
 
 resource "aws_s3_bucket" "bucket_functions" {
   bucket = "${local.prefix}-${var.bucket_functions}-${var.account}"
-  tags = local.common_tags
+  tags   = local.common_tags
   acl    = "private"
 }
 

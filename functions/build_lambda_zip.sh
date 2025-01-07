@@ -18,7 +18,7 @@ zip_and_upload() {
 
     # Fazer o upload para o bucket S3
     echo "Uploading $ZIP_FILE to s3://$BUCKET_NAME/$FOLDER_NAME/$ZIP_FILE..."
-    aws s3 cp "$ZIP_FILE" "s3://$BUCKET_NAME/$FOLDER_NAME/" 
+    aws s3 cp "$ZIP_FILE" "s3://$BUCKET_NAME/$FOLDER_NAME/"
 
     # Remover o arquivo ZIP local
     rm "$ZIP_FILE"
