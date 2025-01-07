@@ -1,3 +1,44 @@
+import subprocess
+import sys
+import os
+
+# Diretório de instalação (alterar conforme necessário)
+install_dir = "/tmp/python"
+
+# Pacotes a serem instalados
+packages = [
+    "boto3==1.35.92",
+    "pandas==2.2.3",
+    "requests==2.32.3",
+    "pyarrow",
+    "s3fs"
+]
+
+# Instala os pacotes no diretório especificado.
+if not os.path.exists(install_dir):
+    os.makedirs(install_dir)
+
+# Adicione o diretório ao sys.path
+sys.path.append(install_dir)
+
+try:
+    # Instale cada pacote usando subprocess
+    for package in packages:
+        subprocess.check_call([
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            package,
+            "--target",
+            install_dir
+        ])
+    print("Pacotes instalados com sucesso.")
+except subprocess.CalledProcessError as e:
+    print(f"Erro ao instalar os pacotes: {e}")
+    raise
+
+
 import json
 import base64
 import boto3
@@ -109,7 +150,7 @@ def lambda_handler(event, context):
                 return
 
             file_name = f"dados_ibov_{datetime.date.today()}.parquet"
-            local_path = f"./{file_name}"
+            local_path = f"{bucket_name}/{s3_path}{file_name}"
 
             df.to_parquet(f"{local_path}", index=False)
             #s3.upload_file(f"{local_path}", bucket_name, f"{s3_path}{file_name}")
