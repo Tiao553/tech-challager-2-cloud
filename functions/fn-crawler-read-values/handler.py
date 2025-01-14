@@ -84,13 +84,11 @@ def lambda_handler(event, context):
         Part: float = Field(alias='Part.(%)')
 
     def scrapping() -> str:
-
         # Configuração do diretório de download
-        download_dir = "/temp/"
+        download_dir = "C:\\Users\\Tales Santos\\Documents\\pos_graduação\\"
 
         if not os.path.exists(download_dir):
             os.makedirs(download_dir)
-
 
         # Configuração das opções do Chrome
         chrome_options = Options()
@@ -99,52 +97,45 @@ def lambda_handler(event, context):
             "download.prompt_for_download": False,  # Não perguntar onde salvar
             "download.directory_upgrade": True,  # Atualizar o diretório automaticamente
             "safebrowsing.enabled": True,  # Habilitar downloads seguros
-            "profile.default_content_settings.popups": 1,  # Desabilitar popups
-            "profile.content_settings.exceptions.automatic_downloads.*.setting": 1  # Permitir downloads automáticos
         })
-        chrome_options.add_argument("--headless")  # Executar em segundo plano (sem abrir a janela do navegador)
-        chrome_options.add_argument("--disable-gpu")  # Desabilitar GPU, necessário para o modo headless em alguns sistemas
-        chrome_options.add_argument("--no-sandbox")  # Desabilitar sandbox, útil para alguns ambientes
-
-        # Configuração para capturar logs
-        caps = DesiredCapabilities.CHROME
-        caps['loggingPrefs'] = {'browser': 'ALL'}  # Captura todos os logs do navegador
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--no-sandbox")
 
         # Configuração do driver do Chrome
-        service = Service("chromedriver.exe")  # Exemplo: "C:/chromedriver.exe"
+        service = Service("chromedriver.exe")
         driver = webdriver.Chrome(service=service, options=chrome_options)
-
-        # Aplique as capabilities após a inicialização
-        driver.capabilities.update(caps)
 
         try:
             # Abre o site
             driver.get("https://sistemaswebb3-listados.b3.com.br/indexPage/day/IBOV?language=pt-br")
 
-            # Aguarda até que o botão de download esteja visível
+            # Aguarda até que o botão de download esteja visível e clicável
             download_button = WebDriverWait(driver, 60).until(
                 EC.element_to_be_clickable((By.LINK_TEXT, "Download"))
             )
 
-            # Clica no botão de download
+            # Simula o clique no botão de download
             download_button.click()
-            print("Download iniciado.")
 
-            # Aguarda até que o arquivo seja baixado (você pode verificar a existência do arquivo no diretório de download)
-            WebDriverWait(driver, 60).until(
-                lambda driver: any(f.endswith(".csv") for f in os.listdir(download_dir))  # Verifica se um arquivo CSV foi baixado
-            )
+            # Aguarda o download ser concluído (ajuste o tempo conforme necessário)
+            time.sleep(20)
 
-            # Captura e imprime os logs do navegador
-            logs = driver.get_log('browser')
-            for log in logs:
-                print(log)
+            # Verifica se o arquivo foi baixado
+            downloaded_files = [f for f in os.listdir(download_dir) if f.endswith(".csv")]
+            if downloaded_files:
+                print("Download concluído com sucesso!")
+            else:
+                print("O arquivo não foi baixado.")
 
+        except Exception as e:
+            print(f"Erro: {e}")
 
         finally:
             driver.quit()
 
         return download_dir
+
     
 
     def remove_linhas_mescladas(path_file, file_name):
