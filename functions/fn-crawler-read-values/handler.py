@@ -1,15 +1,31 @@
-import base64
+# import base64
 import datetime
-import json
+# import json
 import logging
 import os
 import subprocess
 import sys
-import time
+# import time
 
 import boto3
 import pandas as pd
-import requests
+# import requests
+
+
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+
+import pandas as pd
+from pydantic import BaseModel, Field, ValidationError
+from typing import List
+from io import StringIO
+
 
 # Diretório de instalação (alterar conforme necessário)
 install_dir = "/tmp/python"
@@ -18,7 +34,9 @@ install_dir = "/tmp/python"
 packages = [
     "boto3==1.35.92",
     "pandas==2.2.3",
-    "requests==2.32.3",
+    # "requests==2.32.3",
+    "selenium==4.27.1",
+    "pydantic==2.10.5",
     "pyarrow",
     "s3fs"
 ]
@@ -58,93 +76,110 @@ s3_path = f"pregao-ibov/"
 
 
 def lambda_handler(event, context):
-    def generate_encoded_param(page_number):
-        """Gera o parâmetro base64 para a URL."""
+    class StockData(BaseModel):
+        Codigo: str
+        Acao: str
+        Tipo: str
+        Qtde_Teorica: int = Field(alias='Qtde. Teorica')
+        Part: float = Field(alias='Part.(%)')
+
+    def scrapping() -> str:
+
+        # Configuração do diretório de download
+        download_dir = "/temp/"
+
+        if not os.path.exists(download_dir):
+            os.makedirs(download_dir)
+
+
+        # Configuração das opções do Chrome
+        chrome_options = Options()
+        chrome_options.add_experimental_option("prefs", {
+            "download.default_directory": download_dir,  # Define o diretório de download
+            "download.prompt_for_download": False,  # Não perguntar onde salvar
+            "download.directory_upgrade": True,  # Atualizar o diretório automaticamente
+            "safebrowsing.enabled": True,  # Habilitar downloads seguros
+            "profile.default_content_settings.popups": 1,  # Desabilitar popups
+            "profile.content_settings.exceptions.automatic_downloads.*.setting": 1  # Permitir downloads automáticos
+        })
+        chrome_options.add_argument("--headless")  # Executar em segundo plano (sem abrir a janela do navegador)
+        chrome_options.add_argument("--disable-gpu")  # Desabilitar GPU, necessário para o modo headless em alguns sistemas
+        chrome_options.add_argument("--no-sandbox")  # Desabilitar sandbox, útil para alguns ambientes
+
+        # Configuração para capturar logs
+        caps = DesiredCapabilities.CHROME
+        caps['loggingPrefs'] = {'browser': 'ALL'}  # Captura todos os logs do navegador
+
+        # Configuração do driver do Chrome
+        service = Service("chromedriver.exe")  # Exemplo: "C:/chromedriver.exe"
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+
+        # Aplique as capabilities após a inicialização
+        driver.capabilities.update(caps)
+
         try:
-            data = {
-                "language": "pt-br",
-                "pageNumber": page_number,
-                "pageSize": 20,
-                "index": "IBOV",
-            }
-            json_data = json.dumps(data)
-            encoded_data = base64.b64encode(json_data.encode()).decode("utf-8")
-            logger.info(
-                f"Parâmetro gerado para a página {page_number}: {encoded_data[:50]}..."
+            # Abre o site
+            driver.get("https://sistemaswebb3-listados.b3.com.br/indexPage/day/IBOV?language=pt-br")
+
+            # Aguarda até que o botão de download esteja visível
+            download_button = WebDriverWait(driver, 60).until(
+                EC.element_to_be_clickable((By.LINK_TEXT, "Download"))
             )
-            return encoded_data
-        except Exception as e:
-            logger.error(
-                f"Erro ao gerar o parâmetro base64 para a página {page_number}: {e}"
+
+            # Clica no botão de download
+            download_button.click()
+            print("Download iniciado.")
+
+            # Aguarda até que o arquivo seja baixado (você pode verificar a existência do arquivo no diretório de download)
+            WebDriverWait(driver, 60).until(
+                lambda driver: any(f.endswith(".csv") for f in os.listdir(download_dir))  # Verifica se um arquivo CSV foi baixado
             )
-            raise
 
-    def fetch_data():
-        """Busca os dados paginados da API."""
-        all_data = []
+            # Captura e imprime os logs do navegador
+            logs = driver.get_log('browser')
+            for log in logs:
+                print(log)
 
-        headers = {
-            "accept": "application/json, text/plain, */*",
-            "accept-encoding": "gzip, deflate, br",
-            "accept-language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            "referer": "https://sistemaswebb3-listados.b3.com.br/",
-        }
 
+        finally:
+            driver.quit()
+
+        return download_dir
+    
+
+    def remove_linhas_mescladas(path_file, file_name):
+        with open(f"{path_file}{file_name}", "r") as file:
+            file_content = file.readlines()  # Call the read method correctly
+        # Dividir o conteúdo do arquivo em linhas
+        lines = file_content
+        print(f"Total lines read: {len(lines)}")  # Debugging statement
+        
+        # Remover a primeira e as duas últimas linhas
+        file_content = file_content[1:-2]
+
+        # Reunir as linhas restantes
+        cleaned_content = "\n".join(file_content)
+        
+        # Substituir ',' por '.'
+        cleaned_content = cleaned_content.replace(',', '')
+
+        # Carregar o conteúdo no pandas
+        return pd.read_csv(StringIO(cleaned_content), sep=";",index_col=False)
+
+
+    def pre_processamento(df: pd.DataFrame) -> pd.DataFrame:
+        # Renomeando as colunas
+        df.columns = ['Codigo', 'Acao', 'Tipo', 'Qtde. Teorica', 'Part.(%)']
+        # Validando e convertendo os dados usando Pydantic
         try:
-            encoded_param = generate_encoded_param(1)
-            url = f"https://sistemaswebb3-listados.b3.com.br/indexProxy/indexCall/GetPortfolioDay/{encoded_param}"
-            response = requests.get(url, headers=headers)
+            data = df.to_dict(orient='records')
+            validated_data = [StockData(**item).dict() for item in data]
+            return pd.DataFrame(validated_data)
+        except ValidationError as e:
+            print(e.json())
+            return pd.DataFrame()
 
-            if response.status_code != 200:
-                logger.error(
-                    f"Erro ao buscar dados iniciais: {response.status_code}")
-                return None
-
-            json_response = response.json()
-            total_pages = json_response.get("page", {}).get("totalPages", 0)
-
-            if total_pages == 0:
-                logger.warning("Nenhuma página disponível na resposta.")
-                return None
-
-            logger.info(f"Total de páginas: {total_pages}")
-
-            for page_number in range(1, total_pages + 1):
-                logger.info(
-                    f"Buscando a página {page_number} de {total_pages}...")
-                encoded_param = generate_encoded_param(page_number)
-                url = f"https://sistemaswebb3-listados.b3.com.br/indexProxy/indexCall/GetPortfolioDay/{encoded_param}"
-
-                try:
-                    response = requests.get(url, headers=headers)
-                    if response.status_code == 200:
-                        json_response = response.json()
-                        page_data = json_response.get("results", [])
-                        if page_data:
-                            all_data.extend(page_data)
-                            logger.info(
-                                f"Página {page_number}: {len(page_data)} registros encontrados."
-                            )
-                        else:
-                            logger.warning(f"Página {page_number} está vazia.")
-                    else:
-                        logger.error(
-                            f"Falha ao buscar a página {page_number}: {response.status_code}"
-                        )
-                except Exception as e:
-                    logger.error(
-                        f"Erro ao buscar dados da página {page_number}: {e}")
-
-                time.sleep(1)  # Evitar sobrecarregar a API
-
-            return all_data
-
-        except Exception as e:
-            logger.error(f"Erro na busca de dados: {e}")
-            return None
-
-    def save_to_s3(data):
+    def save_to_s3(data, file_name):
         """Salva os dados no S3 em formato Parquet."""
         try:
             df = pd.DataFrame(data)
@@ -152,7 +187,7 @@ def lambda_handler(event, context):
                 logger.warning("Nenhum dado para salvar no S3.")
                 return
 
-            file_name = f"dados_ibov_{datetime.date.today()}.parquet"
+           
             local_path = f"{bucket_name}/{s3_path}{file_name}"
 
             df.to_parquet(f"{local_path}", index=False)
@@ -163,9 +198,12 @@ def lambda_handler(event, context):
 
     # Fluxo principal
     try:
-        data = fetch_data()
+        data = scrapping()
         if data:
-            save_to_s3(data)
+            file_name = f"dados_ibov_{datetime.date.today()}.parquet"
+            df = remove_linhas_mescladas(data, file_name)
+            data_processed = pre_processamento(df)
+            save_to_s3(data_processed, file_name)
         else:
             logger.error("Nenhum dado foi retornado da API.")
     except Exception as e:
