@@ -152,7 +152,7 @@ def lambda_handler(event, context):
         cleaned_content = "\n".join(file_content)
         
         # Substituir ',' por '.'
-        cleaned_content = cleaned_content.replace(',', '')
+        cleaned_content = cleaned_content.replace(',', '.')
 
         # Carregar o conteúdo no pandas
         return pd.read_csv(StringIO(cleaned_content), sep=";",index_col=False)
@@ -163,6 +163,7 @@ def lambda_handler(event, context):
         df.columns = ['Codigo', 'Acao', 'Tipo', 'Qtde. Teorica', 'Part.(%)']
         # Validando e convertendo os dados usando Pydantic
         try:
+            df['Qtde. Teorica'] = df['Qtde. Teorica'].str.replace('.', '').astype(int)
             data = df.to_dict(orient='records')
             validated_data = [StockData(**item).dict() for item in data]
             return pd.DataFrame(validated_data)
