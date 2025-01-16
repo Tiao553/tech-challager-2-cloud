@@ -6,6 +6,14 @@ resource "aws_s3_bucket" "buckets" {
   acl    = "private"
 }
 
+resource "aws_s3_bucket_versioning" "bucket_versioning" {
+  count  = length(var.bucket_names)
+  bucket = aws_s3_bucket.buckets[count.index].id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "bucket_sse" {
   count  = length(var.bucket_names)
@@ -59,5 +67,13 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "bucket_functions_
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256" # ou "aws:kms" se estiver usando KMS
     }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "function_bucket_versioning" {
+  bucket = aws_s3_bucket.bucket_functions.id
+
+  versioning_configuration {
+    status = "Enabled"
   }
 }

@@ -1,3 +1,6 @@
 boto3==1.35.92
 pandas==2.2.3
-Requests==2.32.3
+selenium==4.27.1
+pydantic==2.10.5
+pyarrow
+s3fs

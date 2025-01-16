@@ -1,51 +1,24 @@
-import base64
-import datetime
-import json
+# Libs for generaal porpuse
 import logging
 import os
-import subprocess
-import sys
+import boto3
 import time
 
-import boto3
+# Libs for crawler
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+
+# Libs for data processing
 import pandas as pd
-import requests
-
-# Diretório de instalação (alterar conforme necessário)
-install_dir = "/tmp/python"
-
-# Pacotes a serem instalados
-packages = [
-    "boto3==1.35.92",
-    "pandas==2.2.3",
-    "requests==2.32.3",
-    "pyarrow",
-    "s3fs"
-]
-
-# Instala os pacotes no diretório especificado.
-if not os.path.exists(install_dir):
-    os.makedirs(install_dir)
-
-# Adicione o diretório ao sys.path
-sys.path.append(install_dir)
-
-try:
-    # Instale cada pacote usando subprocess
-    for package in packages:
-        subprocess.check_call([
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            package,
-            "--target",
-            install_dir
-        ])
-    print("Pacotes instalados com sucesso.")
-except subprocess.CalledProcessError as e:
-    print(f"Erro ao instalar os pacotes: {e}")
-    raise
+import datetime
+from pydantic import BaseModel, Field, ValidationError
+from typing import List
+from io import StringIO
 
 
 # Configura o logger para o Lambda e CloudWatch
@@ -58,101 +31,129 @@ s3_path = f"pregao-ibov/"
 
 
 def lambda_handler(event, context):
-    def generate_encoded_param(page_number):
-        """Gera o parâmetro base64 para a URL."""
+    class StockData(BaseModel):
+        Codigo: str
+        Acao: str
+        Tipo: str
+        Qtde_Teorica: int = Field(alias='Qtde. Teorica')
+        Part: float = Field(alias='Part.(%)')
+
+    def scrapping() -> str:
+        # Configuração do diretório de download
+        current_dir = os.getcwd()
+        print(f"Current Directory: {current_dir}")
+
+        # Define the new folder name
+        folder_name = "downloads"
+
+        # Create the full path for the new folder
+        download_dir = os.path.join(current_dir, folder_name)
+
+        # Check if the folder already exists
+        if not os.path.exists(download_dir):
+            os.makedirs(download_dir)
+            print(f"Folder '{folder_name}' created at: {download_dir}")
+        else:
+            print(f"Folder '{folder_name}' already exists at: {download_dir}")
+
+        # Configuração das opções do Chrome
+        chrome_options = Options()
+        chrome_options.add_experimental_option("prefs", {
+            "download.default_directory": download_dir,  # Define o diretório de download
+            "download.prompt_for_download": False,  # Não perguntar onde salvar
+            "download.directory_upgrade": True,  # Atualizar o diretório automaticamente
+            "safebrowsing.enabled": True,  # Habilitar downloads seguros
+        })
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--no-sandbox")
+
+        # Configuração do driver do Chrome 
+        # Inicializa o driver com o ChromeDriver gerenciado automaticamente
+        driver = webdriver.Chrome(
+            service=Service(
+                ChromeDriverManager().install(),
+            ), options=chrome_options,
+        )
+
         try:
-            data = {
-                "language": "pt-br",
-                "pageNumber": page_number,
-                "pageSize": 20,
-                "index": "IBOV",
-            }
-            json_data = json.dumps(data)
-            encoded_data = base64.b64encode(json_data.encode()).decode("utf-8")
-            logger.info(
-                f"Parâmetro gerado para a página {page_number}: {encoded_data[:50]}..."
+            # Abre o site
+            print("Acessando o site...")
+            driver.get("https://sistemaswebb3-listados.b3.com.br/indexPage/day/IBOV?language=pt-br")
+
+            # Aguarda até que o botão de download esteja visível e clicável
+            print()
+            download_button = WebDriverWait(driver, 60).until(
+                EC.element_to_be_clickable((By.LINK_TEXT, "Download"))
             )
-            return encoded_data
-        except Exception as e:
-            logger.error(
-                f"Erro ao gerar o parâmetro base64 para a página {page_number}: {e}"
-            )
-            raise
 
-    def fetch_data():
-        """Busca os dados paginados da API."""
-        all_data = []
+            # Simula o clique no botão de download
+            download_button.click()
 
-        headers = {
-            "accept": "application/json, text/plain, */*",
-            "accept-encoding": "gzip, deflate, br",
-            "accept-language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            "referer": "https://sistemaswebb3-listados.b3.com.br/",
-        }
+            # Aguarda o download ser concluído (ajuste o tempo conforme necessário)
+            print("Baixando o arquivo...")
+            time.sleep(5)
 
-        try:
-            encoded_param = generate_encoded_param(1)
-            url = f"https://sistemaswebb3-listados.b3.com.br/indexProxy/indexCall/GetPortfolioDay/{encoded_param}"
-            response = requests.get(url, headers=headers)
-
-            if response.status_code != 200:
-                logger.error(
-                    f"Erro ao buscar dados iniciais: {response.status_code}")
-                return None
-
-            json_response = response.json()
-            total_pages = json_response.get("page", {}).get("totalPages", 0)
-
-            if total_pages == 0:
-                logger.warning("Nenhuma página disponível na resposta.")
-                return None
-
-            logger.info(f"Total de páginas: {total_pages}")
-
-            for page_number in range(1, total_pages + 1):
-                logger.info(
-                    f"Buscando a página {page_number} de {total_pages}...")
-                encoded_param = generate_encoded_param(page_number)
-                url = f"https://sistemaswebb3-listados.b3.com.br/indexProxy/indexCall/GetPortfolioDay/{encoded_param}"
-
-                try:
-                    response = requests.get(url, headers=headers)
-                    if response.status_code == 200:
-                        json_response = response.json()
-                        page_data = json_response.get("results", [])
-                        if page_data:
-                            all_data.extend(page_data)
-                            logger.info(
-                                f"Página {page_number}: {len(page_data)} registros encontrados."
-                            )
-                        else:
-                            logger.warning(f"Página {page_number} está vazia.")
-                    else:
-                        logger.error(
-                            f"Falha ao buscar a página {page_number}: {response.status_code}"
-                        )
-                except Exception as e:
-                    logger.error(
-                        f"Erro ao buscar dados da página {page_number}: {e}")
-
-                time.sleep(1)  # Evitar sobrecarregar a API
-
-            return all_data
+            # Verifica se o arquivo foi baixado
+            downloaded_files = [f for f in os.listdir(download_dir) if f.endswith(".csv")]
+            if downloaded_files:
+                print("Download concluído com sucesso!")
+            else:
+                print("O arquivo não foi baixado.")
 
         except Exception as e:
-            logger.error(f"Erro na busca de dados: {e}")
-            return None
+            print(f"Erro: {e}")
 
-    def save_to_s3(data):
+        finally:
+            driver.quit()
+
+        return download_dir
+
+    
+
+    def remove_linhas_mescladas(path_file) -> pd.DataFrame: 
+        try:
+            with open(f"{path_file}", "r", encoding="iso-8859-1") as file:
+                file_content = file.readlines()  # Call the read method correctly
+            # Dividir o conteúdo do arquivo em linhas
+            lines = file_content
+            print(f"Total lines read: {len(lines)}")  # Debugging statement
+            
+            # Remover a primeira e as duas últimas linhas
+            file_content = file_content[1:-2]
+
+            # Reunir as linhas restantes
+            cleaned_content = "\n".join(file_content)
+            
+            # Substituir ',' por '.'
+            cleaned_content = cleaned_content.replace(',', '.')
+
+            # Carregar o conteúdo no pandas
+            return pd.read_csv(StringIO(cleaned_content), sep=";",index_col=False)
+        except Exception as e:
+            print(f"Erro ao remover linhas mescladas: {e}")
+
+
+    def pre_processamento(df: pd.DataFrame) -> pd.DataFrame:
+        # Renomeando as colunas
+        df.columns = ['Codigo', 'Acao', 'Tipo', 'Qtde. Teorica', 'Part.(%)']
+        # Validando e convertendo os dados usando Pydantic
+        try:
+            df['Qtde. Teorica'] = df['Qtde. Teorica'].str.replace('.', '').astype(int)
+            data = df.to_dict(orient='records')
+            validated_data = [StockData(**item).dict() for item in data]
+            return pd.DataFrame(validated_data)
+        except ValidationError as e:
+            print(e.json())
+            return pd.DataFrame()
+
+    def save_to_s3(df, file_name):
         """Salva os dados no S3 em formato Parquet."""
         try:
-            df = pd.DataFrame(data)
             if df.empty:
                 logger.warning("Nenhum dado para salvar no S3.")
                 return
 
-            file_name = f"dados_ibov_{datetime.date.today()}.parquet"
             local_path = f"{bucket_name}/{s3_path}{file_name}"
 
             df.to_parquet(f"{local_path}", index=False)
@@ -163,9 +164,17 @@ def lambda_handler(event, context):
 
     # Fluxo principal
     try:
-        data = fetch_data()
+        data = scrapping()
+        # Obter a data atual
+        today = datetime.date.today()
+        # Formatar a data no formato desejado
+        formatted_date = today.strftime("%d-%m-%y")
+        path_download = f"/home/tiao/tech-challager-2-cloud/downloads/IBOVDia_{formatted_date}.csv"
         if data:
-            save_to_s3(data)
+            file_name = f"dados_ibov_{datetime.date.today()}.parquet"
+            df = remove_linhas_mescladas(path_download)
+            data_processed = pre_processamento(df)
+            save_to_s3(data_processed, file_name)
         else:
             logger.error("Nenhum dado foi retornado da API.")
     except Exception as e:

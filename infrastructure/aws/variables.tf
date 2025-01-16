@@ -45,6 +45,16 @@ variable "database_names" {
   ]
 }
 
+variable "s3_exclusions" {
+  type    = list(list(string))
+  default = []
+}
+
+variable "crawler_schedule" {
+  type    = list(string)
+  default = []
+}
+
 variable "bucket_paths" {
   description = "Paths to S3 bucket used by the crawler"
   type        = list(string)

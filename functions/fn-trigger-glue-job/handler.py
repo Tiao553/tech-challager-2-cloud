@@ -1,6 +1,5 @@
 import json
 import time
-
 import boto3
 
 
@@ -8,7 +7,7 @@ def lambda_handler(event, context):
     client = boto3.client('glue')
 
     # Nome do Glue Job configurado
-    glue_job_name = 'your-glue-job-name'
+    glue_job_name = 'tech_challager_job_refined'
 
     try:
         # Inicia o job no Glue
@@ -43,3 +42,5 @@ def lambda_handler(event, context):
             'statusCode': 500,
             'body': json.dumps(f"Error triggering Glue Job: {str(e)}")
         }
+
+lambda_handler(True,True)
