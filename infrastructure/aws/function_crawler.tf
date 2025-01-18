@@ -1,29 +1,19 @@
 # Criar Lambda Function
 resource "aws_lambda_function" "crawler_lambda" {
   function_name = "${local.prefix}-crawler_pregao"
-  s3_bucket     = "tech-challanger-2-prd-temp-functions-593793061865"
-  s3_key        = "fn-crawler-read-values/fn-crawler-read-values.zip" 
   role          = aws_iam_role.lambda_decompress.arn
-  handler       = "fn-crawler-read-values.handler.lambda_handler"
-  runtime       = "python3.10"
+  package_type  = "Image"
+  image_uri = "593793061865.dkr.ecr.us-east-1.amazonaws.com/tech-challanger-2-prd-lambda-repo@sha256:4ced531e057d3b6229f8017141d51b1d8208ef53965e77102218180e51b9e088"
   timeout       = 900
   memory_size   = 1024
-}
+  architectures = ["x86_64"]
 
-# Lambda Function
-# resource "aws_lambda_function" "crawler_lambda" {
-#   function_name = "${local.prefix}-crawler_pregao"
-#   role          = aws_iam_role.lambda_role.arn
-#   package_type  = "${local.prefix}-lambda-crawler-repo"
-#   image_uri     = "${aws_ecr_repository.lambda_repo.repository_url}:latest"
-#   timeout       = 900
-#   memory_size   = 1024
-#   environment {
-#     variables = {
-#       LAMBDA_TASK_ROOT = "/app/"
-#     }
-#   }
-# }
+  tags = merge(
+    local.common_tags,
+  )
+
+  depends_on = [aws_ecr_repository.lambda_repo]
+}
 
 
 

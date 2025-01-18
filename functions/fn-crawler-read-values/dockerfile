@@ -1,0 +1,44 @@
+FROM public.ecr.aws/lambda/python:3.10
+
+# Instalar dependências do Chrome
+RUN yum install -y \
+    alsa-lib \
+    atk \
+    cups-libs \
+    gtk3 \
+    ipa-gothic-fonts \
+    libXcomposite \
+    libXcursor \
+    libXdamage \
+    libXext \
+    libXi \
+    libXrandr \
+    libXScrnSaver \
+    libXtst \
+    pango \
+    xorg-x11-fonts-100dpi \
+    xorg-x11-fonts-75dpi \
+    xorg-x11-fonts-cyrillic \
+    xorg-x11-fonts-misc \
+    xorg-x11-fonts-Type1 \
+    xorg-x11-utils \
+    unzip
+
+# Instalar Chrome e ChromeDriver
+RUN curl -Lo /tmp/chrome.rpm https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm && \
+    yum install -y /tmp/chrome.rpm && \
+    rm /tmp/chrome.rpm
+
+RUN curl -Lo /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE)/chromedriver_linux64.zip && \
+    unzip /tmp/chromedriver.zip -d /usr/local/bin/ && \
+    rm /tmp/chromedriver.zip
+
+# Copiar arquivos de requisitos e instalar dependências
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Copiar o código da função
+COPY handler.py ${LAMBDA_TASK_ROOT}
+
+# Defina o comando padrão para execução da função Lambda
+CMD ["handler.lambda_handler"]

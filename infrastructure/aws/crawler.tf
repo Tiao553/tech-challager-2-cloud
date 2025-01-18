@@ -1,12 +1,25 @@
-resource "aws_glue_crawler" "glue_crawler" {
-  count = length(var.database_names)
+locals {
+  database_to_paths = {
+    "dl-raw-zone"      = "s3://tech-challanger-2-prd-raw-zone-593793061865/pregao-ibov/*.parquet"
+    "dl-delivery-zone" = "s3://tech-challanger-2-prd-delivery-zone-593793061865/agr-pregao-ibov-diario/*.parquet"
+  }
+}
 
-  name          = "${local.prefix}-${var.database_names[count.index]}_crawler"
+
+resource "aws_glue_crawler" "glue_crawler" {
+  count = length(var.database_names) # Cria um crawler para cada banco de dados
+
+  name          = "${local.prefix}-${var.database_names[count.index]}-crawler"
   database_name = var.database_names[count.index]
   role          = aws_iam_role.glue_role.arn
 
+  # Define os caminhos S3 fixos para cada banco de dados
   s3_target {
-    path = var.bucket_paths[count.index]
+    path = lookup(
+      local.database_to_paths,
+      var.database_names[count.index],
+      null # Retorna null se não houver mapeamento, o que causaria um erro
+    )
   }
 
   schema_change_policy {
@@ -21,9 +34,7 @@ resource "aws_glue_crawler" "glue_crawler" {
     }
   })
 
-  #schedule = "cron(15 12 * * ? *)"
-
   tags = merge(
-    local.common_tags,
+    local.common_tags
   )
 }

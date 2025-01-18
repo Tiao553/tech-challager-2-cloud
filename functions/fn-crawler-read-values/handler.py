@@ -3,7 +3,6 @@ import logging
 import os
 import boto3
 import time
-
 # Libs for crawler
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -40,21 +39,7 @@ def lambda_handler(event, context):
 
     def scrapping() -> str:
         # Configuração do diretório de download
-        current_dir = os.getcwd()
-        print(f"Current Directory: {current_dir}")
-
-        # Define the new folder name
-        folder_name = "downloads"
-
-        # Create the full path for the new folder
-        download_dir = os.path.join(current_dir, folder_name)
-
-        # Check if the folder already exists
-        if not os.path.exists(download_dir):
-            os.makedirs(download_dir)
-            print(f"Folder '{folder_name}' created at: {download_dir}")
-        else:
-            print(f"Folder '{folder_name}' already exists at: {download_dir}")
+        download_dir = "/tmp/downloads"
 
         # Configuração das opções do Chrome
         chrome_options = Options()
@@ -72,7 +57,7 @@ def lambda_handler(event, context):
         # Inicializa o driver com o ChromeDriver gerenciado automaticamente
         driver = webdriver.Chrome(
             service=Service(
-                ChromeDriverManager().install(),
+                ChromeDriverManager().install(driver_path="/tmp")
             ), options=chrome_options,
         )
 

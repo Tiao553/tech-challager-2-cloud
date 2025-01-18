@@ -21,7 +21,18 @@ resource "aws_iam_role" "lambda_decompress" {
   name               = "${local.prefix}_Role_Lambda_decompress_S3"
   path               = "/"
   description        = "Provides write permissions to CloudWatch Logs and S3 Full Access"
-  assume_role_policy = file("./permissions/Role_Lambda_decompress_S3.json")
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
 }
 
 resource "aws_iam_policy" "lambda_decompress" {

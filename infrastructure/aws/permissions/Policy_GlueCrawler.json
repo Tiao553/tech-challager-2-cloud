@@ -44,7 +44,9 @@
             ],
             "Resource": [
                 "arn:aws:s3:::aws-glue-*/*",
-                "arn:aws:s3:::*/*aws-glue-*/*"
+                "arn:aws:s3:::*/*aws-glue-*/*",
+                "arn:aws:s3:::tech-challanger-2-prd-raw-zone-593793061865/*",
+                "arn:aws:s3:::tech-challanger-2-prd-delivery-zone-593793061865/*"
             ]
         },
         {
@@ -54,7 +56,9 @@
             ],
             "Resource": [
                 "arn:aws:s3:::crawler-public*",
-                "arn:aws:s3:::aws-glue-*"
+                "arn:aws:s3:::aws-glue-*",
+                "arn:aws:s3:::tech-challanger-2-prd-raw-zone-593793061865/*",
+                "arn:aws:s3:::tech-challanger-2-prd-delivery-zone-593793061865/*"
             ]
         },
         {

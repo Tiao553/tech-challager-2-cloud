@@ -1,167 +1,169 @@
-# Tech challenge 2 - Arquitetura cloud
+# Tech Challenge 2 - Pipeline Batch Bovespa
+
+## Introdução
+
+Este projeto faz parte do Tech Challenge Fase 2 e tem como objetivo construir um pipeline de dados para extrair, processar e analisar dados do pregão da B3 utilizando serviços da AWS, como o S3, Glue, Lambda e Athena. 
+
+![alt text](img/archtecture-base-fiap.png)
+
+Este README detalha as etapas necessárias para configurar e executar o pipeline, bem como os entregáveis esperados.
+
 ---
 
+## Arquitetura
 
+A arquitetura do pipeline segue o diagrama abaixo:
 
-Para construção da arquitetura base vamos utilizar o terraform e o framework blueprint da empresa do Sebastião o Rony que cria um setup aws base para nossa aplicação e vamos incrementando com base a nessecidade do projeto.
+1. **Scraping de Dados**: Extrai os dados do site da B3 e realiza o upload em um bucket S3.
+2. **Bucket Raw**: Os dados brutos são enviados para o bucket `Raw` no Amazon S3 em formato Parquet e particionados por data.
+3. **Trigger de Lambda**: O upload de arquivos aciona uma função Lambda.
+4. **ETL com Glue**: A Lambda dispara um job Glue que realiza transformações nos dados.
+5. **Dados Refinados**: Os dados processados são salvos no bucket `Refined` em formato Parquet, particionados por data e abreviação da ação.
+6. **Catálogo no Glue**: O Glue cataloga os dados automaticamente e cria uma tabela.
+7. **Consulta no Athena**: Os dados estão disponíveis para consulta no Athena.
 
-primeiramente vamos configurar o aws cli para acesso externo à aws.
+![alt text](img/archtecture.png)
 
----
+## Links Importantes
 
-# Instalação do AWS CLI no Linux
+- **Página Oficial da B3 para Scraping**: [https://www.b3.com.br](https://www.b3.com.br)
+- **Documentação do AWS CLI**: [https://docs.aws.amazon.com/cli](https://docs.aws.amazon.com/cli)
+- **Documentação do Terraform**: [https://developer.hashicorp.com/terraform](https://developer.hashicorp.com/terraform)
+- **Guia do AWS Glue**: [https://docs.aws.amazon.com/glue](https://docs.aws.amazon.com/glue)
+- **Consulta Athena**: [https://docs.aws.amazon.com/athena](https://docs.aws.amazon.com/athena)
 
-Este guia descreve o processo de instalação do AWS Command Line Interface (CLI) em sistemas Linux.
+## Requisitos do Projeto
 
-## Requisitos
+Os seguintes requisitos devem ser atendidos:
 
-- Um sistema Linux com acesso à internet.
-- Permissões de administrador para instalar pacotes.
+1. Realizar scraping de dados do site da B3.
+2. Armazenar os dados brutos no bucket `Raw` em formato Parquet.
+3. Configurar um bucket S3 que acione uma função Lambda ao receber novos arquivos.
+4. Implementar uma função Lambda que dispare um Glue Job.
+5. Configurar o Glue Job para realizar as seguintes transformações:
+   - Agrupamento numérico e sumarização de dados.
+   - Renomear duas colunas do dataset.
+   - Realizar cálculos com campos de data.
+6. Salvar os dados refinados no bucket `Refined` em formato Parquet, particionados por data e abreviação da ação.
+7. Configurar o Glue Catalog para criar tabelas automaticamente.
+8. Permitir consultas SQL no Athena utilizando os dados refinados.
+9. Garantir que os buckets tenham o versionamento habilitado.
 
-## Passos de Instalação
+## Pré-requisitos
 
-1. **Atualizar os pacotes do sistema**
+Antes de iniciar, certifique-se de ter:
 
-   Antes de começar, certifique-se de que seu sistema está atualizado:
-   ```bash
-   sudo apt update && sudo apt upgrade -y
-   ```
-   *(Substitua `apt` por `yum`, `dnf` ou o gerenciador de pacotes da sua distribuição, se aplicável.)*
+- **AWS CLI** instalado e configurado.
+- **Terraform** instalado.
+- Permissões de acesso à sua conta AWS.
 
-2. **Baixar o binário do AWS CLI**
+### Instalação do AWS CLI
 
-   Use o comando `curl` para baixar a versão mais recente do AWS CLI:
-   ```bash
-   curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-   ```
+```bash
+sudo apt update && sudo apt upgrade -y
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+```
 
-3. **Extrair o arquivo compactado**
+### Instalação do Terraform
 
-   Extraia o conteúdo do arquivo ZIP:
-   ```bash
-   unzip awscliv2.zip
-   ```
+```bash
+sudo apt update && sudo apt upgrade -y
+curl -fsSL "https://releases.hashicorp.com/terraform/X.Y.Z/terraform_X.Y.Z_linux_amd64.zip" -o terraform.zip
+unzip terraform.zip
+sudo mv terraform /usr/local/bin/
+terraform --version
+```
 
-   Caso o comando `unzip` não esteja instalado, instale-o usando:
-   ```bash
-   sudo apt install unzip -y
-   ```
+### Configuração do AWS CLI
 
-4. **Instalar o AWS CLI**
+Configure suas credenciais AWS:
 
-   Execute o script de instalação:
-   ```bash
-   sudo ./aws/install
-   ```
-
-5. **Verificar a Instalação**
-
-   Confirme que a instalação foi bem-sucedida verificando a versão instalada:
-   ```bash
-   aws --version
-   ```
-   O resultado esperado deve ser semelhante a:
-   ```
-   aws-cli/2.x.x Python/3.x.x Linux/x86_64
-   ```
-
-## Opções de Configuração (Opcional)
-
-Depois de instalar, configure o AWS CLI com suas credenciais:
 ```bash
 aws configure
 ```
-Você precisará fornecer:
+
+### Para esse processo é necessário fornecer:
+
 - Access Key ID
 - Secret Access Key
 - Região padrão (ex.: `us-east-1`)
-- Formato de saída (opcional, ex.: `json`)
-
-## Limpeza
-
-Após a instalação, você pode remover os arquivos de instalação para liberar espaço:
-```bash
-rm -rf awscliv2.zip aws
-```
-
-## Problemas Comuns
-
-1. **Permissão negada**: Se encontrar erros relacionados a permissão, use `sudo` para os comandos.
-2. **AWS CLI não encontrado**: Certifique-se de que o diretório de instalação está incluído no PATH:
-   ```bash
-   export PATH=/usr/local/bin:$PATH
-   ```
-
-Agora você está pronto para usar o AWS CLI em seu sistema Linux e o proximo passo é configurar o terraform.
 
 ---
 
-# Instalação do Terraform no Linux
+## Configuração e Execução do Pipeline
 
-Este guia descreve o processo de instalação do Terraform em sistemas Linux.
-
-## Requisitos
-
-- Um sistema Linux com acesso à internet.
-- Permissões de administrador para instalar pacotes.
-
-## Passos de Instalação
-
-1. **Atualizar os pacotes do sistema**
-
-   Antes de começar, certifique-se de que seu sistema está atualizado:
+1. Clone este repositório.
+2. Use o Terraform para criar os recursos AWS necessários:
    ```bash
-   sudo apt update && sudo apt upgrade -y
+   terraform init
+   terraform apply
    ```
-   *(Substitua `apt` por `yum`, `dnf` ou o gerenciador de pacotes da sua distribuição, se aplicável.)*
+3. Certifique-se de que os buckets, funções Lambda e Glue Jobs foram criados corretamente.
 
-2. **Baixar o binário do Terraform**
+---
 
-   Baixe a versão mais recente do Terraform diretamente do site oficial da HashiCorp:
-   ```bash
-   curl -fsSL "https://releases.hashicorp.com/terraform/$(curl -s https://releases.hashicorp.com/terraform/ | grep -oP 'terraform/[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 | cut -d '/' -f 2)/terraform_$(curl -s https://releases.hashicorp.com/terraform/ | grep -oP 'terraform/[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 | cut -d '/' -f 2)_linux_amd64.zip" -o terraform.zip
-   ```
+## Scraping de Dados
 
-3. **Extrair o arquivo compactado**
+### Descrição
 
-   Extraia o conteúdo do arquivo ZIP:
-   ```bash
-   unzip terraform.zip
-   ```
+Esta etapa é responsável por extrair dados da B3 utilizando a API disponível executar a limpeza dos dados e fazer o upload para o bucket `Raw` no S3. O processo foi construindo utilizando a linguagem Python e as bibliotecas:  `boto3`, `pandas`, `selenium`, `pydantic`.
 
-   Caso o comando `unzip` não esteja instalado, instale-o usando:
-   ```bash
-   sudo apt install unzip -y
-   ```
+### Dependências
 
-4. **Mover o binário para um diretório no PATH**
+- `boto3`
+- `pandas`
+- `selenium`
+- `pydantic`
 
-   Mova o binário do Terraform para um diretório que esteja no PATH do sistema:
-   ```bash
-   sudo mv terraform /usr/local/bin/
-   ```
+Instale as dependências com:
 
-5. **Verificar a Instalação**
-
-   Confirme que a instalação foi bem-sucedida verificando a versão instalada:
-   ```bash
-   terraform --version
-   ```
-   O resultado esperado deve ser semelhante a:
-   ```
-   Terraform vX.Y.Z
-   ```
-
-## Limpeza
-
-Após a instalação, você pode remover os arquivos temporários:
 ```bash
-rm -rf terraform.zip
+pip install boto3 pandas selenium pydantic
 ```
 
-## Problemas Comuns
+### Código de Exemplo (necessário?)
 
-1. **Terraform não encontrado**: Certifique-se de que o binário foi movido para um diretório no PATH. Reinicie o terminal se necessário.
-2. **Versão incorreta**: Certifique-se de que baixou a versão correta do Terraform para o seu sistema operacional e arquitetura.
+O código a seguir realiza o scraping e salva os dados em formato Parquet no S3:
 
-Agora você está pronto para usar o Terraform em seu sistema Linux para gerenciar infraestrutura como código!
+---
+
+## Detalhes do Pipeline
+
+(ver daqui pra baixo)
+### Lambda Function
+
+- **Descrição**: Responsável por acionar o Glue Job ao detectar novos arquivos no bucket `Raw`.
+- **Tecnologia**: Implementada em Python.
+
+### Glue Job
+
+- **Descrição**: Não foi feito no modo visual e será explicado melhor nas observações.
+- **Transformações**: Atende os requisitos de agrupação, renomeação de colunas e cálculos de data.
+
+### S3 Buckets
+
+- `Raw`: Armazena os dados brutos enviados pelo scraping.
+- `Refined`: Armazena os dados processados e otimizados para consulta.
+
+### Athena
+
+- **Descrição**: Permite consultas SQL nos dados refinados.
+- **Configurações**: Utiliza o Glue Catalog como metadados.
+
+---
+
+## Como Testar
+
+1. Realize o upload de um arquivo no bucket `Raw`.
+2. Verifique no console da AWS se o Glue Job foi acionado automaticamente.
+3. Confirme que os dados processados foram salvos no bucket `Refined`.
+4. Consulte os dados processados no Athena utilizando SQL.
+
+---
+
+## Observações
+
+- Utilizamos 

@@ -53,7 +53,6 @@ resource "aws_s3_bucket_policy" "buckets_policy" {
 
 
 ### bucket da function
-
 resource "aws_s3_bucket" "bucket_functions" {
   bucket = "${local.prefix}-${var.bucket_functions}-${var.account}"
   tags   = local.common_tags

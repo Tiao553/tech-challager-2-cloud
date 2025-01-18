@@ -1,12 +1,12 @@
-name: Production
+name: Developing
 
 on:
   push:
     branches:
-      - main
+      - dev
   pull_request:
     branches:
-      - main
+      - dev
 
 jobs:
   terraform:
@@ -28,7 +28,7 @@ jobs:
       - name: Terraform Init
         run: |
           terraform -chdir=infrastructure/aws init
-          terraform -chdir=infrastructure/aws workspace select prd || terraform -chdir=infrastructure/aws workspace new prd
+          terraform -chdir=infrastructure/aws workspace select dev || terraform -chdir=infrastructure/aws workspace new dev
 
       # Step 4: Validate Terraform Code
       - name: Terraform Validate
@@ -63,7 +63,6 @@ jobs:
 
       - name: Build and Zip Lambda Functions
         run: ./functions/build_lambda_zip.sh
-
 env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

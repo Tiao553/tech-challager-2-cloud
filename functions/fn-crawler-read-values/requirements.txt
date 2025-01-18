@@ -4,3 +4,4 @@ selenium==4.27.1
 pydantic==2.10.5
 pyarrow
 s3fs
+webdriver_manager
